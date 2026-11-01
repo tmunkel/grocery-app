@@ -48,6 +48,22 @@ public sealed class ListServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Removing_products_deletes_their_items_from_all_lists()
+    {
+        var milk = FakeCatalog.Product("Milk");
+        var bread = FakeCatalog.Product("Bread");
+        await _lists.AddProductAsync(ListKind.Shopping, milk);
+        await _lists.AddProductAsync(ListKind.Inventory, milk);
+        await _lists.AddProductAsync(ListKind.Shopping, bread);
+
+        Assert.Equal(2, await _lists.RemoveProductsAsync([milk.Id]));
+
+        Assert.Equal("Bread", Assert.Single(await _lists.GetItemsAsync(ListKind.Shopping)).Name);
+        Assert.Empty(await _lists.GetItemsAsync(ListKind.Inventory));
+        Assert.Equal(0, await _lists.RemoveProductsAsync([]));
+    }
+
+    [Fact]
     public async Task Lists_are_separate()
     {
         var milk = FakeCatalog.Product("Milk");

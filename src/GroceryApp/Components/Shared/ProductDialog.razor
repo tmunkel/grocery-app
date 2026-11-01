@@ -86,12 +86,29 @@
             <p class="alert error">@error</p>
         }
 
-        <div class="actions">
-            <button type="button" class="btn secondary" @onclick="OnCancel" disabled="@saving">Cancel</button>
-            <button type="submit" class="btn primary" disabled="@(saving || string.IsNullOrWhiteSpace(name))">
-                @(saving ? "Saving…" : IsEdit ? "Save" : "Save & add")
-            </button>
-        </div>
+        @if (confirmDelete)
+        {
+            <div class="confirm-delete" role="alertdialog" aria-label="Confirm delete">
+                <p>Delete <strong>@Product!.Name</strong> from the product inventory? It will also be removed from your shopping list and inventory.</p>
+                <div class="actions">
+                    <button type="button" class="btn secondary" @onclick="() => confirmDelete = false" disabled="@saving">Keep</button>
+                    <button type="button" class="btn danger" @onclick="DeleteAsync" disabled="@saving">@(saving ? "Deleting…" : "Delete")</button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="actions">
+                <button type="button" class="btn secondary" @onclick="OnCancel" disabled="@saving">Cancel</button>
+                <button type="submit" class="btn primary" disabled="@(saving || string.IsNullOrWhiteSpace(name))">
+                    @(saving ? "Saving…" : IsEdit ? "Save" : "Save & add")
+                </button>
+            </div>
+            @if (IsEdit)
+            {
+                <button type="button" class="btn link danger block" @onclick="() => confirmDelete = true" disabled="@saving">🗑 Delete product</button>
+            }
+        }
     </form>
 </div>
 
@@ -105,6 +122,8 @@
     [Parameter] public string? InitialName { get; set; }
     [Parameter, EditorRequired] public EventCallback<CatalogProduct> OnSaved { get; set; }
     [Parameter, EditorRequired] public EventCallback OnCancel { get; set; }
+    /// <summary>Raised after the product (edit mode only) was deleted from the inventory service.</summary>
+    [Parameter] public EventCallback<CatalogProduct> OnDeleted { get; set; }
 
     private bool IsEdit => Product is not null;
     private string? CurrentImageUrl => removeImage ? null : Product?.LocalImageUrl;
@@ -119,6 +138,7 @@
     private bool removeImage;
     private bool lookingUp;
     private bool saving;
+    private bool confirmDelete;
     private string? error;
     private byte[]? imageBytes;
     private string? imageContentType;
@@ -246,6 +266,27 @@
         catch (CatalogException ex)
         {
             error = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (Product is null) return;
+        error = null;
+        saving = true;
+        try
+        {
+            await Catalog.DeleteAsync(Product.Id);
+            await OnDeleted.InvokeAsync(Product);
+        }
+        catch (CatalogException ex)
+        {
+            error = ex.Message;
+            confirmDelete = false;
         }
         finally
         {

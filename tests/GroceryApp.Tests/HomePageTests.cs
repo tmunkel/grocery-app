@@ -216,4 +216,72 @@ public sealed class HomePageTests : BunitContext
         Assert.Equal("Edit product", cut.Find("form.sheet h2").TextContent);
         Assert.Empty(cut.FindAll(".item-list .item:not(.clickable)"));
     }
+
+    [Fact]
+    public async Task Deleting_product_removes_it_from_catalog_and_both_lists()
+    {
+        var product = FakeCatalog.Product("Bananas");
+        var other = FakeCatalog.Product("Bread");
+        _catalog.Products.AddRange([product, other]);
+        await _lists.AddProductAsync(ListKind.Shopping, product);
+        await _lists.AddProductAsync(ListKind.Inventory, product);
+        await _lists.AddProductAsync(ListKind.Shopping, other);
+        var cut = Render<Home>();
+
+        cut.FindAll(".item-main").Single(b => b.TextContent.Contains("Bananas")).Click();
+        cut.WaitForAssertion(() => cut.Find("form.sheet .btn.link.danger.block").Click());
+        Assert.Contains("Bananas", cut.Find(".confirm-delete").TextContent);
+        Assert.Contains(_catalog.Products, p => p.Id == product.Id);
+
+        cut.Find(".confirm-delete .btn.danger").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("form.sheet")));
+        Assert.Contains("Bananas deleted", cut.Find(".alert.success").TextContent);
+        Assert.Equal("Bread", Assert.Single(cut.FindAll(".item-list .name")).TextContent);
+        Assert.DoesNotContain(_catalog.Products, p => p.Id == product.Id);
+        Assert.Empty(await _lists.GetItemsAsync(ListKind.Inventory));
+    }
+
+    [Fact]
+    public async Task Cancelling_delete_keeps_product()
+    {
+        var product = FakeCatalog.Product("Bananas");
+        _catalog.Products.Add(product);
+        await _lists.AddProductAsync(ListKind.Shopping, product);
+        var cut = Render<Home>();
+
+        cut.Find(".item-main").Click();
+        cut.WaitForAssertion(() => cut.Find("form.sheet .btn.link.danger.block").Click());
+        cut.Find(".confirm-delete .btn.secondary").Click();
+
+        Assert.Empty(cut.FindAll(".confirm-delete"));
+        Assert.Single(_catalog.Products);
+        Assert.Single(await _lists.GetItemsAsync(ListKind.Shopping));
+    }
+
+    [Fact]
+    public async Task List_drops_items_whose_product_was_deleted_elsewhere()
+    {
+        var product = FakeCatalog.Product("Bananas");
+        var other = FakeCatalog.Product("Bread");
+        _catalog.Products.Add(other);
+        await _lists.AddProductAsync(ListKind.Shopping, product);
+        await _lists.AddProductAsync(ListKind.Shopping, other);
+
+        var cut = Render<Home>();
+
+        cut.WaitForAssertion(() => Assert.Equal("Bread", Assert.Single(cut.FindAll(".item-list .name")).TextContent));
+    }
+
+    [Fact]
+    public async Task List_keeps_items_when_catalog_is_unavailable()
+    {
+        await _lists.AddProductAsync(ListKind.Shopping, FakeCatalog.Product("Bananas"));
+        _catalog.Unavailable = true;
+
+        var cut = Render<Home>();
+
+        Assert.Equal("Bananas", Assert.Single(cut.FindAll(".item-list .name")).TextContent);
+        Assert.Single(await _lists.GetItemsAsync(ListKind.Shopping));
+    }
 }

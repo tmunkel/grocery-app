@@ -106,6 +106,19 @@ public class ListService(IDbContextFactory<GroceryDbContext> dbFactory, TimeProv
         return item;
     }
 
+    /// <summary>Removes the given products from all lists. Returns the number of removed items.</summary>
+    public async Task<int> RemoveProductsAsync(IReadOnlyCollection<Guid> productIds, CancellationToken ct = default)
+    {
+        if (productIds.Count == 0)
+        {
+            return 0;
+        }
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var ids = productIds.Distinct().ToList();
+        return await db.ListItems.Where(i => i.ProductId != null && ids.Contains(i.ProductId.Value)).ExecuteDeleteAsync(ct);
+    }
+
     public async Task RemoveAsync(Guid itemId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);

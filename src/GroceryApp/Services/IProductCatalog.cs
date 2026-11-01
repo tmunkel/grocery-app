@@ -51,6 +51,8 @@ public interface IProductCatalog
     Task<CatalogProduct> UploadImageAsync(Guid productId, Stream content, string fileName, string contentType, CancellationToken ct = default);
     Task<CatalogProduct> ImportImageAsync(Guid productId, string url, CancellationToken ct = default);
     Task DeleteImageAsync(Guid productId, CancellationToken ct = default);
+    /// <summary>Deletes the product and its image. Succeeds when the product no longer exists.</summary>
+    Task DeleteAsync(Guid productId, CancellationToken ct = default);
     Task<ExternalProductInfo?> LookupExternalAsync(string ean, CancellationToken ct = default);
     Task<ProductImage?> GetImageAsync(Guid productId, CancellationToken ct = default);
 }

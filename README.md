@@ -12,6 +12,7 @@ Mobile-first web app for a **shopping list** and a **home grocery inventory**. B
 - Unknown EAN → **New product** dialog, prefilled from Open Food Facts (name, brand, size, category, image)
 - Take or upload a product photo. The browser resizes it before upload
 - Edit a product: tap an item in a list, or the ✏️ button in search results, to change its details, replace the photo or remove the image
+- Delete a product: in the edit dialog, tap **🗑 Delete product** and confirm. The product is deleted from the inventory service and removed from the shopping list and inventory. Products deleted elsewhere (e.g. directly through the API) disappear from the lists the next time a list is opened
 - List items keep a copy of the product's name, brand, EAN and image link, so the list still works when the inventory service is down. The copy is updated when you edit a product here, and refreshed from the service each time a list is opened
 - Product images are proxied through the app (`/product-images/{id}`), so phones only need to reach the app
 

@@ -78,6 +78,13 @@ public sealed class FakeCatalog : IProductCatalog
         return Task.CompletedTask;
     }
 
+    public Task DeleteAsync(Guid productId, CancellationToken ct = default)
+    {
+        ThrowIfUnavailable();
+        Products.RemoveAll(p => p.Id == productId);
+        return Task.CompletedTask;
+    }
+
     public Task<CatalogProduct> CreateAsync(ProductInput input, CancellationToken ct = default)
     {
         ThrowIfUnavailable();

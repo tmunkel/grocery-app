@@ -46,6 +46,9 @@ public class HttpProductCatalog(HttpClient http, ILogger<HttpProductCatalog> log
     public async Task DeleteImageAsync(Guid productId, CancellationToken ct = default) =>
         await SendAsync<object>(() => new HttpRequestMessage(HttpMethod.Delete, $"api/products/{productId}/image"), ct);
 
+    public async Task DeleteAsync(Guid productId, CancellationToken ct = default) =>
+        await SendAsync<object>(() => new HttpRequestMessage(HttpMethod.Delete, $"api/products/{productId}"), ct);
+
     public async Task<CatalogProduct> UploadImageAsync(Guid productId, Stream content, string fileName, string contentType, CancellationToken ct = default)
     {
         var file = new StreamContent(content);
