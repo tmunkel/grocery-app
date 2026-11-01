@@ -25,6 +25,29 @@ public sealed class ListServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Sync_updates_cached_details_on_all_lists_and_reports_changes()
+    {
+        var milk = FakeCatalog.Product("Milk");
+        var bread = FakeCatalog.Product("Bread");
+        await _lists.AddProductAsync(ListKind.Shopping, milk);
+        await _lists.AddProductAsync(ListKind.Inventory, milk);
+        await _lists.AddProductAsync(ListKind.Shopping, bread);
+
+        var renamed = milk with { Name = "Whole milk", Brand = "Dairy", HasImage = true };
+        var changed = await _lists.SyncProductsAsync([renamed, bread]);
+
+        Assert.Equal(2, changed);
+        foreach (var list in new[] { ListKind.Shopping, ListKind.Inventory })
+        {
+            var item = (await _lists.GetItemsAsync(list)).Single(i => i.ProductId == milk.Id);
+            Assert.Equal("Whole milk", item.Name);
+            Assert.Equal("Dairy", item.Brand);
+            Assert.Equal(renamed.LocalImageUrl, item.ImageUrl);
+        }
+        Assert.Equal(0, await _lists.SyncProductsAsync([renamed, bread]));
+    }
+
+    [Fact]
     public async Task Lists_are_separate()
     {
         var milk = FakeCatalog.Product("Milk");

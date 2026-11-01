@@ -45,6 +45,44 @@ public class ListService(IDbContextFactory<GroceryDbContext> dbFactory, TimeProv
         return item;
     }
 
+    /// <summary>
+    /// Updates the cached product details (name, brand, EAN, image) of all list items for the given products.
+    /// Returns the number of items that changed.
+    /// </summary>
+    public async Task<int> SyncProductsAsync(IReadOnlyCollection<CatalogProduct> products, CancellationToken ct = default)
+    {
+        if (products.Count == 0)
+        {
+            return 0;
+        }
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var byId = products.DistinctBy(p => p.Id).ToDictionary(p => p.Id);
+        var ids = byId.Keys.ToList();
+        var items = await db.ListItems.Where(i => i.ProductId != null && ids.Contains(i.ProductId.Value)).ToListAsync(ct);
+        var changed = 0;
+        foreach (var item in items)
+        {
+            var product = byId[item.ProductId!.Value];
+            var imageUrl = product.LocalImageUrl;
+            if (item.Name == product.Name && item.Brand == product.Brand && item.Ean == product.Ean && item.ImageUrl == imageUrl)
+            {
+                continue;
+            }
+            item.Name = product.Name;
+            item.Brand = product.Brand;
+            item.Ean = product.Ean;
+            item.ImageUrl = imageUrl;
+            changed++;
+        }
+
+        if (changed > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        return changed;
+    }
+
     /// <summary>Changes the quantity; items reaching zero are removed. Returns the updated item or null when removed.</summary>
     public async Task<ListItem?> ChangeQuantityAsync(Guid itemId, int delta, CancellationToken ct = default)
     {

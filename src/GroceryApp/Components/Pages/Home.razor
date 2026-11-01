@@ -58,6 +58,8 @@
                             <span class="name">@product.Name</span>
                             <span class="meta">@Meta(product.Brand, product.Quantity, product.Ean)</span>
                         </div>
+                        <button type="button" class="icon-btn edit" title="Edit product" aria-label="Edit @product.Name"
+                                @onclick="() => OpenEdit(product)" @onclick:stopPropagation>✏️</button>
                         <span class="icon-btn primary" aria-hidden="true">＋</span>
                     </li>
                 }
@@ -83,11 +85,14 @@
                         <input type="checkbox" class="tick" checked="@item.Checked" aria-label="Bought @item.Name"
                                @onchange="e => SetCheckedAsync(item, (bool)e.Value!)" />
                     }
-                    <ProductThumb Url="@item.ImageUrl" />
-                    <div class="item-text">
-                        <span class="name">@item.Name</span>
-                        <span class="meta">@Meta(item.Brand, null, item.Ean)</span>
-                    </div>
+                    <button type="button" class="item-main" title="Edit product" aria-label="Edit @item.Name"
+                            disabled="@(item.ProductId is null)" @onclick="() => OpenEditAsync(item)">
+                        <ProductThumb Url="@item.ImageUrl" />
+                        <span class="item-text">
+                            <span class="name">@item.Name</span>
+                            <span class="meta">@Meta(item.Brand, null, item.Ean)</span>
+                        </span>
+                    </button>
                     <div class="stepper">
                         <button type="button" aria-label="Decrease @item.Name" @onclick="() => ChangeQuantityAsync(item, -1)">@(item.Quantity <= 1 ? "🗑" : "−")</button>
                         <span class="qty">@item.Quantity</span>
@@ -112,9 +117,9 @@
     <BarcodeScanner OnDetectedCode="OnScannedAsync" OnClose="() => showScanner = false" />
 }
 
-@if (showCreate)
+@if (showDialog)
 {
-    <CreateProductDialog InitialEan="@createEan" InitialName="@createName" OnCreated="OnProductCreatedAsync" OnCancel="CloseCreate" />
+    <ProductDialog Product="@editProduct" InitialEan="@createEan" InitialName="@createName" OnSaved="OnProductSavedAsync" OnCancel="CloseDialog" />
 }
 
 @code {
@@ -127,7 +132,8 @@
     private string? message;
     private bool messageIsError;
     private bool showScanner;
-    private bool showCreate;
+    private bool showDialog;
+    private CatalogProduct? editProduct;
     private string? createEan;
     private string? createName;
     private ElementReference searchInput;
@@ -137,7 +143,12 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (focusSearch && !showCreate && !showScanner)
+        if (firstRender)
+        {
+            // Runs only once the circuit is interactive (not during prerendering).
+            await RefreshFromCatalogAsync();
+        }
+        if (focusSearch && !showDialog && !showScanner)
         {
             focusSearch = false;
             try { await searchInput.FocusAsync(); } catch (JSException) { } catch (InvalidOperationException) { }
@@ -146,6 +157,26 @@
 
     private async Task LoadItemsAsync() => items = await Lists.GetItemsAsync(mode);
 
+    /// <summary>Updates cached product details (name, image, ...) of the visible list from the inventory service.</summary>
+    private async Task RefreshFromCatalogAsync()
+    {
+        var ids = items.Where(i => i.ProductId is not null).Select(i => i.ProductId!.Value).Distinct().ToList();
+        if (ids.Count == 0) return;
+        try
+        {
+            var products = await Catalog.GetByIdsAsync(ids);
+            if (await Lists.SyncProductsAsync(products) > 0)
+            {
+                await LoadItemsAsync();
+                StateHasChanged();
+            }
+        }
+        catch (CatalogException)
+        {
+            // The cached details are still usable while the service is unavailable.
+        }
+    }
+
     private async Task SwitchModeAsync(ListKind newMode)
     {
         if (mode == newMode) return;
@@ -153,6 +184,7 @@
         message = null;
         await LoadItemsAsync();
         focusSearch = true;
+        await RefreshFromCatalogAsync();
     }
 
     private async Task SubmitAsync()
@@ -218,22 +250,67 @@
 
     private void OpenCreate(string? ean, string? name)
     {
+        editProduct = null;
         createEan = ean;
         createName = Ean.LooksLikeEan(name) ? null : name;
         results = null;
-        showCreate = true;
+        showDialog = true;
     }
 
-    private void CloseCreate()
+    private void OpenEdit(CatalogProduct product)
     {
-        showCreate = false;
+        editProduct = product;
+        createEan = null;
+        createName = null;
+        showDialog = true;
+    }
+
+    private async Task OpenEditAsync(ListItem item)
+    {
+        if (item.ProductId is not { } productId) return;
+        message = null;
+        try
+        {
+            var product = (await Catalog.GetByIdsAsync([productId])).FirstOrDefault();
+            if (product is null)
+            {
+                ShowError($"{item.Name} no longer exists in the product inventory.");
+                return;
+            }
+            OpenEdit(product);
+        }
+        catch (CatalogException ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private void CloseDialog()
+    {
+        showDialog = false;
+        editProduct = null;
         focusSearch = true;
     }
 
-    private async Task OnProductCreatedAsync(CatalogProduct product)
+    private async Task OnProductSavedAsync(CatalogProduct product)
     {
-        showCreate = false;
-        await AddAsync(product);
+        var wasEdit = editProduct is not null;
+        showDialog = false;
+        editProduct = null;
+        if (!wasEdit)
+        {
+            await AddAsync(product);
+            return;
+        }
+
+        await Lists.SyncProductsAsync([product]);
+        if (results is not null)
+        {
+            results = results.Select(p => p.Id == product.Id ? product : p).ToList();
+        }
+        ShowSuccess($"{product.Name} saved");
+        await LoadItemsAsync();
+        focusSearch = true;
     }
 
     private void CloseResults()

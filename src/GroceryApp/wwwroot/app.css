@@ -168,3 +168,12 @@ h1:focus { outline: none; }
 
 .blazor-error-boundary { background: #b32121; padding: 1rem; color: white; }
 .blazor-error-boundary::after { content: "An error has occurred." }
+
+/* Tappable product area of a list item (opens the edit dialog). */
+.item-main {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;
+    padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.item-main:disabled { cursor: default; }
+.icon-btn.edit { background: none; border-color: transparent; font-size: 16px; }
+.btn.link.danger { color: var(--danger); }

@@ -149,4 +149,71 @@ public sealed class HomePageTests : BunitContext
         cut.WaitForAssertion(() => Assert.Contains("moved to inventory", cut.Find(".alert.success").TextContent));
         Assert.Empty(cut.FindAll(".item-list .item"));
     }
+
+    [Fact]
+    public async Task Editing_list_item_updates_product_and_list()
+    {
+        var product = FakeCatalog.Product("Bananas");
+        _catalog.Products.Add(product);
+        await _lists.AddProductAsync(ListKind.Shopping, product);
+        var cut = Render<Home>();
+
+        cut.Find(".item-main").Click();
+        cut.WaitForAssertion(() => Assert.Equal("Edit product", cut.Find("form.sheet h2").TextContent));
+        var name = cut.Find("form.sheet input");
+        Assert.Equal("Bananas", name.GetAttribute("value"));
+
+        name.Input("Organic bananas");
+        cut.Find("form.sheet").Submit();
+
+        cut.WaitForAssertion(() => Assert.Contains("Organic bananas", cut.Find(".item-list .name").TextContent));
+        Assert.Empty(cut.FindAll("form.sheet"));
+        Assert.Equal("Organic bananas", _catalog.Products.Single().Name);
+        Assert.Empty(_catalog.Created);
+    }
+
+    [Fact]
+    public async Task Removing_image_in_edit_dialog_clears_list_thumbnail()
+    {
+        var product = FakeCatalog.Product("Milk") with { HasImage = true };
+        _catalog.Products.Add(product);
+        await _lists.AddProductAsync(ListKind.Shopping, product);
+        var cut = Render<Home>();
+        Assert.NotNull(cut.Find(".item-list img.thumb"));
+
+        cut.Find(".item-main").Click();
+        cut.WaitForAssertion(() => cut.Find(".btn.link.danger").Click());
+        cut.Find("form.sheet").Submit();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".item-list img.thumb")));
+        Assert.False(_catalog.Products.Single().HasImage);
+    }
+
+    [Fact]
+    public async Task List_refreshes_cached_product_details_from_catalog_on_load()
+    {
+        var product = FakeCatalog.Product("Bananas");
+        _catalog.Products.Add(product);
+        await _lists.AddProductAsync(ListKind.Shopping, product);
+        // Changed elsewhere (e.g. another device) after the item was added.
+        _catalog.Products[0] = product with { Name = "Bananas (bunch)", HasImage = true };
+
+        var cut = Render<Home>();
+
+        cut.WaitForAssertion(() => Assert.Contains("Bananas (bunch)", cut.Find(".item-list .name").TextContent));
+        Assert.NotNull(cut.Find(".item-list img.thumb"));
+    }
+
+    [Fact]
+    public void Edit_button_in_search_results_opens_edit_dialog_without_adding()
+    {
+        _catalog.Products.Add(FakeCatalog.Product("Whole milk"));
+        var cut = Render<Home>();
+        Submit(cut, "milk");
+
+        cut.Find(".results .icon-btn.edit").Click();
+
+        Assert.Equal("Edit product", cut.Find("form.sheet h2").TextContent);
+        Assert.Empty(cut.FindAll(".item-list .item:not(.clickable)"));
+    }
 }

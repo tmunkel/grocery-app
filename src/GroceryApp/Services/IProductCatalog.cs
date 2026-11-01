@@ -44,9 +44,13 @@ public interface IProductCatalog
 {
     Task<IReadOnlyList<CatalogProduct>> SearchAsync(string query, int pageSize = 20, CancellationToken ct = default);
     Task<CatalogProduct?> GetByEanAsync(string ean, CancellationToken ct = default);
+    /// <summary>Loads the given products; unknown ids are omitted.</summary>
+    Task<IReadOnlyList<CatalogProduct>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default);
     Task<CatalogProduct> CreateAsync(ProductInput input, CancellationToken ct = default);
+    Task<CatalogProduct> UpdateAsync(Guid productId, ProductInput input, CancellationToken ct = default);
     Task<CatalogProduct> UploadImageAsync(Guid productId, Stream content, string fileName, string contentType, CancellationToken ct = default);
     Task<CatalogProduct> ImportImageAsync(Guid productId, string url, CancellationToken ct = default);
+    Task DeleteImageAsync(Guid productId, CancellationToken ct = default);
     Task<ExternalProductInfo?> LookupExternalAsync(string ean, CancellationToken ct = default);
     Task<ProductImage?> GetImageAsync(Guid productId, CancellationToken ct = default);
 }

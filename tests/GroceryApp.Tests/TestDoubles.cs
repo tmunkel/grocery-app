@@ -52,6 +52,32 @@ public sealed class FakeCatalog : IProductCatalog
         return Task.FromResult(Products.FirstOrDefault(p => p.Ean == ean));
     }
 
+    public Task<IReadOnlyList<CatalogProduct>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
+    {
+        ThrowIfUnavailable();
+        return Task.FromResult<IReadOnlyList<CatalogProduct>>(Products.Where(p => ids.Contains(p.Id)).ToList());
+    }
+
+    public Task<CatalogProduct> UpdateAsync(Guid productId, ProductInput input, CancellationToken ct = default)
+    {
+        ThrowIfUnavailable();
+        var index = Products.FindIndex(p => p.Id == productId);
+        var product = Products[index] with
+        {
+            Ean = input.Ean, Name = input.Name, Brand = input.Brand, Category = input.Category, Quantity = input.Quantity,
+            Description = input.Description, UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        Products[index] = product;
+        return Task.FromResult(product);
+    }
+
+    public Task DeleteImageAsync(Guid productId, CancellationToken ct = default)
+    {
+        var index = Products.FindIndex(p => p.Id == productId);
+        Products[index] = Products[index] with { HasImage = false, ImageUrl = null };
+        return Task.CompletedTask;
+    }
+
     public Task<CatalogProduct> CreateAsync(ProductInput input, CancellationToken ct = default)
     {
         ThrowIfUnavailable();
@@ -62,8 +88,12 @@ public sealed class FakeCatalog : IProductCatalog
         return Task.FromResult(product);
     }
 
-    public Task<CatalogProduct> UploadImageAsync(Guid productId, Stream content, string fileName, string contentType, CancellationToken ct = default) =>
-        Task.FromResult(Products.Single(p => p.Id == productId) with { HasImage = true });
+    public Task<CatalogProduct> UploadImageAsync(Guid productId, Stream content, string fileName, string contentType, CancellationToken ct = default)
+    {
+        var index = Products.FindIndex(p => p.Id == productId);
+        Products[index] = Products[index] with { HasImage = true, UpdatedAt = DateTimeOffset.UtcNow };
+        return Task.FromResult(Products[index]);
+    }
 
     public Task<CatalogProduct> ImportImageAsync(Guid productId, string url, CancellationToken ct = default)
     {

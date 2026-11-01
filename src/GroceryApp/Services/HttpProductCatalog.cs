@@ -22,9 +22,29 @@ public class HttpProductCatalog(HttpClient http, ILogger<HttpProductCatalog> log
     public Task<CatalogProduct?> GetByEanAsync(string ean, CancellationToken ct = default) =>
         SendAsync<CatalogProduct>(() => new HttpRequestMessage(HttpMethod.Get, $"api/products/ean/{Uri.EscapeDataString(ean.Trim())}"), ct);
 
+    public async Task<IReadOnlyList<CatalogProduct>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
+    {
+        const int batchSize = 100; // service page size limit
+        var products = new List<CatalogProduct>(ids.Count);
+        foreach (var batch in ids.Distinct().Chunk(batchSize))
+        {
+            var url = $"api/products?pageSize={batchSize}&" + string.Join("&", batch.Select(id => $"ids={id}"));
+            var result = await SendAsync<PagedResult<CatalogProduct>>(() => new HttpRequestMessage(HttpMethod.Get, url), ct);
+            products.AddRange(result?.Items ?? []);
+        }
+        return products;
+    }
+
     public async Task<CatalogProduct> CreateAsync(ProductInput input, CancellationToken ct = default) =>
         await SendAsync<CatalogProduct>(() => new HttpRequestMessage(HttpMethod.Post, "api/products") { Content = JsonContent.Create(input) }, ct)
         ?? throw new CatalogException("The product could not be created.");
+
+    public async Task<CatalogProduct> UpdateAsync(Guid productId, ProductInput input, CancellationToken ct = default) =>
+        await SendAsync<CatalogProduct>(() => new HttpRequestMessage(HttpMethod.Put, $"api/products/{productId}") { Content = JsonContent.Create(input) }, ct)
+        ?? throw new CatalogException("The product no longer exists.");
+
+    public async Task DeleteImageAsync(Guid productId, CancellationToken ct = default) =>
+        await SendAsync<object>(() => new HttpRequestMessage(HttpMethod.Delete, $"api/products/{productId}/image"), ct);
 
     public async Task<CatalogProduct> UploadImageAsync(Guid productId, Stream content, string fileName, string contentType, CancellationToken ct = default)
     {
@@ -87,6 +107,10 @@ public class HttpProductCatalog(HttpClient http, ILogger<HttpProductCatalog> log
             if (!response.IsSuccessStatusCode)
             {
                 throw new CatalogException(await ReadErrorAsync(response, ct));
+            }
+            if (response.StatusCode == HttpStatusCode.NoContent || typeof(T) == typeof(object))
+            {
+                return null;
             }
             return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
         }
