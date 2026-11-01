@@ -16,7 +16,7 @@ services:
 
   app:
     build: .
-    image: ${APP_IMAGE:-grocery-app:latest}
+    image: ${REGISTRY:+${REGISTRY}/}grocery-app:${TAG:-latest}
     environment:
       ConnectionStrings__Grocery: "Host=postgres;Port=5432;Database=grocery;Username=grocery;Password=${POSTGRES_PASSWORD:-grocery}"
       # The inventory service runs from its own repo/compose project; by default it is reached via the host's published port.

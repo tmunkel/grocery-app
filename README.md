@@ -32,7 +32,8 @@ Open <http://localhost:8080>. The app container reaches the inventory service th
 | `PRODUCT_INVENTORY_URL` | `http://host.docker.internal:5100/` | Base URL of the inventory service |
 | `APP_PORT` | `8080` | Host port for the app |
 | `DB_PORT` | `5434` | Host port for PostgreSQL (e.g. for pgAdmin) |
-| `APP_IMAGE` | `grocery-app:latest` | Image name for the app, e.g. a registry path |
+| `REGISTRY` | *(none)* | Registry host the image is pulled from / pushed to, e.g. `registry.example.com` |
+| `TAG` | `latest` | Image tag, e.g. a Git commit for rollback |
 
 ### Deploy prebuilt images (no .NET SDK or source on the server)
 
@@ -52,7 +53,7 @@ docker load -i grocery-app.tar
 docker compose up -d --no-build
 ```
 
-**Through a registry.** Set `APP_IMAGE=ghcr.io/<you>/grocery-app:latest`, then run `docker compose build` and `docker compose push app` on the build machine. On the server, put the same `APP_IMAGE` in `.env`, then run `docker compose pull` and `docker compose up -d --no-build`.
+**Through a registry.** Set `$env:REGISTRY = "registry.example.com"`, then run `docker compose build` and `docker compose push app` on the build machine. On the server, put `REGISTRY=registry.example.com` in `.env`, then run `docker compose pull` and `docker compose up -d --no-build`. The image is then `registry.example.com/grocery-app:latest`; set `TAG` to use another tag.
 
 If the inventory service runs on another host, set `PRODUCT_INVENTORY_URL`. Images are built for the build machine's CPU architecture; for an ARM server, use `docker buildx build --platform linux/arm64`. The database tables are created automatically when the app first starts.
 
