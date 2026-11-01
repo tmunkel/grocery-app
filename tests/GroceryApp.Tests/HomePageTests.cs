@@ -182,7 +182,7 @@ public sealed class HomePageTests : BunitContext
         Assert.NotNull(cut.Find(".item-list img.thumb"));
 
         cut.Find(".item-main").Click();
-        cut.WaitForAssertion(() => cut.Find(".btn.link.danger").Click());
+        cut.WaitForAssertion(() => cut.Find("form.sheet .image-actions .danger-outline").Click());
         cut.Find("form.sheet").Submit();
 
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".item-list img.thumb")));
@@ -229,7 +229,7 @@ public sealed class HomePageTests : BunitContext
         var cut = Render<Home>();
 
         cut.FindAll(".item-main").Single(b => b.TextContent.Contains("Bananas")).Click();
-        cut.WaitForAssertion(() => cut.Find("form.sheet .btn.link.danger.block").Click());
+        cut.WaitForAssertion(() => cut.Find("form.sheet .delete-product").Click());
         Assert.Contains("Bananas", cut.Find(".confirm-delete").TextContent);
         Assert.Contains(_catalog.Products, p => p.Id == product.Id);
 
@@ -251,7 +251,7 @@ public sealed class HomePageTests : BunitContext
         var cut = Render<Home>();
 
         cut.Find(".item-main").Click();
-        cut.WaitForAssertion(() => cut.Find("form.sheet .btn.link.danger.block").Click());
+        cut.WaitForAssertion(() => cut.Find("form.sheet .delete-product").Click());
         cut.Find(".confirm-delete .btn.secondary").Click();
 
         Assert.Empty(cut.FindAll(".confirm-delete"));

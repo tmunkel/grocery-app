@@ -72,7 +72,7 @@
                 }
                 else if (CurrentImageUrl is not null)
                 {
-                    <button type="button" class="btn link danger" @onclick="() => removeImage = true">Remove image</button>
+                    <button type="button" class="btn danger-outline" @onclick="() => removeImage = true">🗑 Remove image</button>
                 }
                 else if (removeImage)
                 {
@@ -106,7 +106,7 @@
             </div>
             @if (IsEdit)
             {
-                <button type="button" class="btn link danger block" @onclick="() => confirmDelete = true" disabled="@saving">🗑 Delete product</button>
+                <button type="button" class="btn danger-outline block delete-product" @onclick="() => confirmDelete = true" disabled="@saving">🗑 Delete product</button>
             }
         }
     </form>

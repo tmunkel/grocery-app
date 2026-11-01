@@ -176,9 +176,11 @@ h1:focus { outline: none; }
 }
 .item-main:disabled { cursor: default; }
 .icon-btn.edit { background: none; border-color: transparent; font-size: 16px; }
-.btn.link.danger { color: var(--danger); }
-.btn.danger:not(.link) { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn.danger-outline { background: #fff; border-color: #fca5a5; color: var(--danger); }
+.btn.danger-outline:hover { background: #fef2f2; }
+.btn.danger-outline:disabled { opacity: .5; }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 .btn.danger:disabled { opacity: .5; }
-.btn.link.danger.block { margin-top: 12px; }
+.btn.delete-product { margin-top: 12px; }
 .confirm-delete { margin-top: 12px; padding: 12px; border: 1px solid var(--danger); border-radius: var(--radius); background: #fef2f2; }
 .confirm-delete p { margin: 0; }
