@@ -201,7 +201,7 @@
         }
         if (!string.IsNullOrWhiteSpace(ean) && !Ean.IsValid(ean))
         {
-            error = "The EAN is not valid.";
+            error = "The EAN is not valid. It must be 8, 12, 13 or 14 digits with a correct check digit (the last digit). Check for a typo or scan the barcode.";
             return;
         }
 
