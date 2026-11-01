@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: grocery
       POSTGRES_USER: grocery
-      POSTGRES_PASSWORD: grocery
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-grocery}
     ports:
       - "5434:5432"
     volumes:
@@ -13,6 +13,22 @@ services:
       test: ["CMD-SHELL", "pg_isready -U grocery -d grocery"]
       interval: 5s
       retries: 10
+
+  app:
+    build: .
+    image: grocery-app
+    environment:
+      ConnectionStrings__Grocery: "Host=postgres;Port=5432;Database=grocery;Username=grocery;Password=${POSTGRES_PASSWORD:-grocery}"
+      # The inventory service runs from its own repo/compose project; by default it is reached via the host's published port.
+      ProductInventory__BaseUrl: "${PRODUCT_INVENTORY_URL:-http://host.docker.internal:5100/}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   grocery-db:

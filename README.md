@@ -13,12 +13,30 @@ Mobile-first web app for a **shopping list** and a **home grocery inventory**. B
 - Take or upload a product photo. The browser resizes it before upload
 - Product images are proxied through the app (`/product-images/{id}`), so phones only need to reach the app
 
+## Run with Docker
+
+Start the [product inventory service](../product-inventory-service) first (`docker compose up -d --build` in that repo). Then run:
+
+```powershell
+docker compose up -d --build
+```
+
+Open <http://localhost:8080>. The app container reaches the inventory service through the host's published port (`host.docker.internal:5100`). Settings come from environment variables, which override `appsettings.json` (use `__` in place of `:`, for example `ConnectionStrings__Grocery`). The compose file supports these variables, which you can also put in a `.env` file:
+
+| Variable | Default | Description |
+|---|---|---|
+| `POSTGRES_PASSWORD` | `grocery` | Database password |
+| `PRODUCT_INVENTORY_URL` | `http://host.docker.internal:5100/` | Base URL of the inventory service |
+| `APP_PORT` | `8080` | Host port for the app |
+
+The container serves plain HTTP. On the PC, `http://localhost` counts as a secure origin, so the camera works. Phones need HTTPS, so put a reverse proxy with a certificate in front of the app (for example Caddy, Traefik or nginx).
+
 ## Run locally
 
 Prerequisites: .NET 10 SDK, Docker, and a running [product inventory service](../product-inventory-service) on <http://localhost:5100>.
 
 ```powershell
-docker compose up -d                      # PostgreSQL on localhost:5434
+docker compose up -d postgres             # PostgreSQL only, on localhost:5434
 dotnet dev-certs https --trust            # once
 dotnet run --project src/GroceryApp
 ```
