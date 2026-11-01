@@ -31,6 +31,30 @@ Open <http://localhost:8080>. The app container reaches the inventory service th
 | `POSTGRES_PASSWORD` | `grocery` | Database password |
 | `PRODUCT_INVENTORY_URL` | `http://host.docker.internal:5100/` | Base URL of the inventory service |
 | `APP_PORT` | `8080` | Host port for the app |
+| `DB_PORT` | `5434` | Host port for PostgreSQL (e.g. for pgAdmin) |
+| `APP_IMAGE` | `grocery-app:latest` | Image name for the app, e.g. a registry path |
+
+### Deploy prebuilt images (no .NET SDK or source on the server)
+
+The server needs only Docker with Compose. Build the image on a machine that has the source, then copy it to the server, either as a file or through a registry.
+
+**As a file.** On the build machine:
+
+```powershell
+docker compose build
+docker save -o grocery-app.tar grocery-app:latest
+```
+
+Copy `grocery-app.tar` and `docker-compose.yml`, plus an optional `.env`, to a folder on the server. Start the inventory service first. Then run:
+
+```bash
+docker load -i grocery-app.tar
+docker compose up -d --no-build
+```
+
+**Through a registry.** Set `APP_IMAGE=ghcr.io/<you>/grocery-app:latest`, then run `docker compose build` and `docker compose push app` on the build machine. On the server, put the same `APP_IMAGE` in `.env`, then run `docker compose pull` and `docker compose up -d --no-build`.
+
+If the inventory service runs on another host, set `PRODUCT_INVENTORY_URL`. Images are built for the build machine's CPU architecture; for an ARM server, use `docker buildx build --platform linux/arm64`. The database tables are created automatically when the app first starts.
 
 The container serves plain HTTP. On the PC, `http://localhost` counts as a secure origin, so the camera works. Phones need HTTPS, so put a reverse proxy with a certificate in front of the app (for example Caddy, Traefik or nginx).
 
