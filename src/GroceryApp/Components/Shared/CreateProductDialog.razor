@@ -1,0 +1,215 @@
+@using GroceryApp.Domain
+@using GroceryApp.Services
+@inject IProductCatalog Catalog
+
+<div class="overlay" role="dialog" aria-label="Create product">
+    <form class="sheet" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+        <h2>New product</h2>
+
+        @if (lookingUp)
+        {
+            <p class="hint">Looking up product data…</p>
+        }
+        else if (external is not null)
+        {
+            <p class="hint">Prefilled from Open Food Facts.</p>
+        }
+
+        <label>
+            Name *
+            <input @bind="name" @bind:event="oninput" maxlength="200" required autocomplete="off" />
+        </label>
+        <label>
+            EAN
+            <input @bind="ean" @bind:event="oninput" inputmode="numeric" maxlength="14" autocomplete="off" />
+        </label>
+        <div class="row">
+            <label>
+                Brand
+                <input @bind="brand" maxlength="200" autocomplete="off" />
+            </label>
+            <label>
+                Size
+                <input @bind="quantity" maxlength="50" placeholder="e.g. 500 g" autocomplete="off" />
+            </label>
+        </div>
+        <label>
+            Category
+            <input @bind="category" maxlength="200" autocomplete="off" />
+        </label>
+
+        <div class="image-picker">
+            @if (previewUrl is not null)
+            {
+                <img src="@previewUrl" alt="Selected product image" />
+            }
+            else if (external?.ImageUrl is not null && useExternalImage)
+            {
+                <img src="@external.ImageUrl" alt="Open Food Facts product image" />
+            }
+            else
+            {
+                <div class="placeholder">🛒</div>
+            }
+            <div class="image-actions">
+                <label class="btn secondary">
+                    📷 Photo
+                    <InputFile OnChange="OnFileSelectedAsync" accept="image/*" capture="environment" class="visually-hidden" />
+                </label>
+                @if (external?.ImageUrl is not null && previewUrl is null)
+                {
+                    <label class="check">
+                        <input type="checkbox" @bind="useExternalImage" /> Use this image
+                    </label>
+                }
+                @if (previewUrl is not null)
+                {
+                    <button type="button" class="btn link" @onclick="ClearFile">Remove</button>
+                }
+            </div>
+        </div>
+
+        @if (error is not null)
+        {
+            <p class="alert error">@error</p>
+        }
+
+        <div class="actions">
+            <button type="button" class="btn secondary" @onclick="OnCancel" disabled="@saving">Cancel</button>
+            <button type="submit" class="btn primary" disabled="@(saving || string.IsNullOrWhiteSpace(name))">
+                @(saving ? "Saving…" : "Save & add")
+            </button>
+        </div>
+    </form>
+</div>
+
+@code {
+    public const long MaxImageBytes = 5 * 1024 * 1024;
+    private const int MaxImageDimension = 1280;
+
+    [Parameter] public string? InitialEan { get; set; }
+    [Parameter] public string? InitialName { get; set; }
+    [Parameter, EditorRequired] public EventCallback<CatalogProduct> OnCreated { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnCancel { get; set; }
+
+    private string name = "";
+    private string ean = "";
+    private string brand = "";
+    private string quantity = "";
+    private string category = "";
+    private ExternalProductInfo? external;
+    private bool useExternalImage = true;
+    private bool lookingUp;
+    private bool saving;
+    private string? error;
+    private byte[]? imageBytes;
+    private string? imageContentType;
+    private string? previewUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        name = InitialName?.Trim() ?? "";
+        ean = InitialEan?.Trim() ?? "";
+        if (!Ean.IsValid(ean))
+        {
+            return;
+        }
+
+        lookingUp = true;
+        try
+        {
+            external = await Catalog.LookupExternalAsync(ean);
+            if (external is not null)
+            {
+                if (string.IsNullOrWhiteSpace(name)) name = external.Name ?? "";
+                brand = external.Brand ?? "";
+                quantity = external.Quantity ?? "";
+                category = external.Category ?? "";
+            }
+        }
+        catch (CatalogException)
+        {
+            // Prefill is optional.
+        }
+        finally
+        {
+            lookingUp = false;
+        }
+    }
+
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        error = null;
+        try
+        {
+            // Resizing in the browser keeps phone photos small.
+            var resized = await e.File.RequestImageFileAsync("image/jpeg", MaxImageDimension, MaxImageDimension);
+            await using var stream = resized.OpenReadStream(MaxImageBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            imageBytes = buffer.ToArray();
+            imageContentType = resized.ContentType;
+            previewUrl = $"data:{imageContentType};base64,{Convert.ToBase64String(imageBytes)}";
+        }
+        catch (IOException)
+        {
+            error = "The image is too large (max 5 MB).";
+        }
+    }
+
+    private void ClearFile()
+    {
+        imageBytes = null;
+        previewUrl = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            error = "Please enter a name.";
+            return;
+        }
+        if (!string.IsNullOrWhiteSpace(ean) && !Ean.IsValid(ean))
+        {
+            error = "The EAN is not valid.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var product = await Catalog.CreateAsync(new ProductInput(
+                NullIfEmpty(ean), name.Trim(), NullIfEmpty(brand), NullIfEmpty(category), NullIfEmpty(quantity), null));
+
+            try
+            {
+                if (imageBytes is not null)
+                {
+                    product = await Catalog.UploadImageAsync(product.Id, new MemoryStream(imageBytes), "photo.jpg", imageContentType ?? "image/jpeg");
+                }
+                else if (useExternalImage && external?.ImageUrl is not null)
+                {
+                    product = await Catalog.ImportImageAsync(product.Id, external.ImageUrl);
+                }
+            }
+            catch (CatalogException)
+            {
+                // The product exists; a failed image upload should not block adding it.
+            }
+
+            await OnCreated.InvokeAsync(product);
+        }
+        catch (CatalogException ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}

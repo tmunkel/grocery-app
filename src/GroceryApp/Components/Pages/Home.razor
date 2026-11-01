@@ -1,0 +1,275 @@
+@page "/"
+@using GroceryApp.Domain
+@using GroceryApp.Services
+@inject IProductCatalog Catalog
+@inject ListService Lists
+
+<PageTitle>@(mode == ListKind.Shopping ? "Shopping list" : "Inventory")</PageTitle>
+
+<header class="topbar">
+    <div class="mode-toggle" role="tablist">
+        <button type="button" role="tab" class="@(mode == ListKind.Shopping ? "active" : null)"
+                aria-selected="@(mode == ListKind.Shopping)" @onclick="() => SwitchModeAsync(ListKind.Shopping)">
+            🛒 Shopping
+        </button>
+        <button type="button" role="tab" class="@(mode == ListKind.Inventory ? "active" : null)"
+                aria-selected="@(mode == ListKind.Inventory)" @onclick="() => SwitchModeAsync(ListKind.Inventory)">
+            🏠 Inventory
+        </button>
+    </div>
+
+    <form class="search" @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+        <input @ref="searchInput" @bind="query" @bind:event="oninput" type="search" id="search"
+               placeholder="Scan or type EAN / product name" aria-label="EAN or product name"
+               autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
+        <button type="button" class="icon-btn" title="Scan with camera" aria-label="Scan with camera" @onclick="() => showScanner = true">📷</button>
+        <button type="submit" class="icon-btn primary" title="Search" aria-label="Search" disabled="@busy">🔍</button>
+    </form>
+</header>
+
+<main class="content">
+    @if (message is not null)
+    {
+        <p class="alert @(messageIsError ? "error" : "success")" role="status" @onclick="() => message = null">@message</p>
+    }
+
+    @if (busy)
+    {
+        <p class="hint">Searching…</p>
+    }
+
+    @if (results is not null)
+    {
+        <section class="results">
+            <div class="section-head">
+                <h2>Results</h2>
+                <button type="button" class="btn link" @onclick="CloseResults">Close</button>
+            </div>
+            @if (results.Count == 0)
+            {
+                <p class="hint">No product found for "@lastSearch".</p>
+            }
+            <ul class="item-list">
+                @foreach (var product in results)
+                {
+                    <li class="item clickable" @key="product.Id" @onclick="() => AddAsync(product)">
+                        <ProductThumb Url="@product.LocalImageUrl" />
+                        <div class="item-text">
+                            <span class="name">@product.Name</span>
+                            <span class="meta">@Meta(product.Brand, product.Quantity, product.Ean)</span>
+                        </div>
+                        <span class="icon-btn primary" aria-hidden="true">＋</span>
+                    </li>
+                }
+            </ul>
+            <button type="button" class="btn secondary block" @onclick="() => OpenCreate(null, lastSearch)">＋ Create new product</button>
+        </section>
+    }
+
+    <section>
+        <div class="section-head">
+            <h2>@(mode == ListKind.Shopping ? "Shopping list" : "Inventory") <span class="count">@items.Count</span></h2>
+        </div>
+        @if (items.Count == 0)
+        {
+            <p class="empty">@(mode == ListKind.Shopping ? "Your shopping list is empty." : "Your inventory is empty.") Scan or search a product to add it.</p>
+        }
+        <ul class="item-list">
+            @foreach (var item in items)
+            {
+                <li class="item @(item.Checked ? "checked" : null)" @key="item.Id">
+                    @if (mode == ListKind.Shopping)
+                    {
+                        <input type="checkbox" class="tick" checked="@item.Checked" aria-label="Bought @item.Name"
+                               @onchange="e => SetCheckedAsync(item, (bool)e.Value!)" />
+                    }
+                    <ProductThumb Url="@item.ImageUrl" />
+                    <div class="item-text">
+                        <span class="name">@item.Name</span>
+                        <span class="meta">@Meta(item.Brand, null, item.Ean)</span>
+                    </div>
+                    <div class="stepper">
+                        <button type="button" aria-label="Decrease @item.Name" @onclick="() => ChangeQuantityAsync(item, -1)">@(item.Quantity <= 1 ? "🗑" : "−")</button>
+                        <span class="qty">@item.Quantity</span>
+                        <button type="button" aria-label="Increase @item.Name" @onclick="() => ChangeQuantityAsync(item, 1)">＋</button>
+                    </div>
+                </li>
+            }
+        </ul>
+
+        @if (mode == ListKind.Shopping && items.Any(i => i.Checked))
+        {
+            <div class="actions">
+                <button type="button" class="btn secondary" @onclick="RemoveCheckedAsync">Remove bought</button>
+                <button type="button" class="btn primary" @onclick="MoveCheckedAsync">Move bought to inventory</button>
+            </div>
+        }
+    </section>
+</main>
+
+@if (showScanner)
+{
+    <BarcodeScanner OnDetectedCode="OnScannedAsync" OnClose="() => showScanner = false" />
+}
+
+@if (showCreate)
+{
+    <CreateProductDialog InitialEan="@createEan" InitialName="@createName" OnCreated="OnProductCreatedAsync" OnCancel="CloseCreate" />
+}
+
+@code {
+    private ListKind mode = ListKind.Shopping;
+    private List<ListItem> items = [];
+    private List<CatalogProduct>? results;
+    private string query = "";
+    private string lastSearch = "";
+    private bool busy;
+    private string? message;
+    private bool messageIsError;
+    private bool showScanner;
+    private bool showCreate;
+    private string? createEan;
+    private string? createName;
+    private ElementReference searchInput;
+    private bool focusSearch = true;
+
+    protected override async Task OnInitializedAsync() => await LoadItemsAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focusSearch && !showCreate && !showScanner)
+        {
+            focusSearch = false;
+            try { await searchInput.FocusAsync(); } catch (JSException) { } catch (InvalidOperationException) { }
+        }
+    }
+
+    private async Task LoadItemsAsync() => items = await Lists.GetItemsAsync(mode);
+
+    private async Task SwitchModeAsync(ListKind newMode)
+    {
+        if (mode == newMode) return;
+        mode = newMode;
+        message = null;
+        await LoadItemsAsync();
+        focusSearch = true;
+    }
+
+    private async Task SubmitAsync()
+    {
+        var term = query.Trim();
+        if (term.Length == 0 || busy) return;
+        await SearchAsync(term);
+    }
+
+    private async Task SearchAsync(string term)
+    {
+        busy = true;
+        message = null;
+        results = null;
+        lastSearch = term;
+        try
+        {
+            if (Ean.LooksLikeEan(term))
+            {
+                var product = await Catalog.GetByEanAsync(term);
+                if (product is not null)
+                {
+                    await AddAsync(product);
+                }
+                else
+                {
+                    query = "";
+                    OpenCreate(term, null);
+                }
+            }
+            else
+            {
+                results = (await Catalog.SearchAsync(term)).ToList();
+            }
+        }
+        catch (CatalogException ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            busy = false;
+            focusSearch = true;
+        }
+    }
+
+    private async Task AddAsync(CatalogProduct product)
+    {
+        var item = await Lists.AddProductAsync(mode, product);
+        ShowSuccess($"{item.Name} added ({item.Quantity}× on {(mode == ListKind.Shopping ? "shopping list" : "inventory")})");
+        results = null;
+        query = "";
+        await LoadItemsAsync();
+        focusSearch = true;
+    }
+
+    private async Task OnScannedAsync(string code)
+    {
+        showScanner = false;
+        query = code;
+        await SearchAsync(code);
+    }
+
+    private void OpenCreate(string? ean, string? name)
+    {
+        createEan = ean;
+        createName = Ean.LooksLikeEan(name) ? null : name;
+        results = null;
+        showCreate = true;
+    }
+
+    private void CloseCreate()
+    {
+        showCreate = false;
+        focusSearch = true;
+    }
+
+    private async Task OnProductCreatedAsync(CatalogProduct product)
+    {
+        showCreate = false;
+        await AddAsync(product);
+    }
+
+    private void CloseResults()
+    {
+        results = null;
+        focusSearch = true;
+    }
+
+    private async Task ChangeQuantityAsync(ListItem item, int delta)
+    {
+        await Lists.ChangeQuantityAsync(item.Id, delta);
+        await LoadItemsAsync();
+    }
+
+    private async Task SetCheckedAsync(ListItem item, bool isChecked)
+    {
+        await Lists.SetCheckedAsync(item.Id, isChecked);
+        await LoadItemsAsync();
+    }
+
+    private async Task MoveCheckedAsync()
+    {
+        var count = await Lists.MoveCheckedToInventoryAsync();
+        ShowSuccess($"{count} item(s) moved to inventory");
+        await LoadItemsAsync();
+    }
+
+    private async Task RemoveCheckedAsync()
+    {
+        var count = await Lists.RemoveCheckedAsync(ListKind.Shopping);
+        ShowSuccess($"{count} item(s) removed");
+        await LoadItemsAsync();
+    }
+
+    private void ShowSuccess(string text) => (message, messageIsError) = (text, false);
+    private void ShowError(string text) => (message, messageIsError) = (text, true);
+
+    private static string Meta(params string?[] parts) => string.Join(" · ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+}

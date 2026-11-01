@@ -1,0 +1,12 @@
+@if (string.IsNullOrEmpty(Url))
+{
+    <div class="thumb placeholder" aria-hidden="true">🛒</div>
+}
+else
+{
+    <img class="thumb" src="@Url" alt="" loading="lazy" />
+}
+
+@code {
+    [Parameter] public string? Url { get; set; }
+}

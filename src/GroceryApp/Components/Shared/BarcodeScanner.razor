@@ -1,0 +1,77 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="overlay" role="dialog" aria-label="Scan barcode">
+    <div class="scanner">
+        <video @ref="video" muted playsinline></video>
+        <div class="scanner-frame"></div>
+        @if (error is not null)
+        {
+            <p class="alert error">@error</p>
+        }
+        else
+        {
+            <p class="hint">Point the camera at a barcode</p>
+        }
+        <button type="button" class="btn secondary block" @onclick="CloseAsync">Cancel</button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public EventCallback<string> OnDetectedCode { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnClose { get; set; }
+
+    private ElementReference video;
+    private IJSObjectReference? module;
+    private DotNetObjectReference<BarcodeScanner>? selfRef;
+    private string? error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/scanner.js");
+            selfRef = DotNetObjectReference.Create(this);
+            await module.InvokeVoidAsync("start", video, selfRef);
+        }
+        catch (JSException ex)
+        {
+            error = ex.Message.Contains("Permission", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("NotAllowed", StringComparison.OrdinalIgnoreCase)
+                ? "Camera permission was denied."
+                : $"Camera could not be started: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public Task OnDetected(string code) => InvokeAsync(() => OnDetectedCode.InvokeAsync(code.Trim()));
+
+    private async Task CloseAsync()
+    {
+        await StopAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task StopAsync()
+    {
+        if (module is null) return;
+        try
+        {
+            await module.InvokeVoidAsync("stop");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopAsync();
+        if (module is not null)
+        {
+            try { await module.DisposeAsync(); } catch (JSDisconnectedException) { }
+        }
+        selfRef?.Dispose();
+    }
+}

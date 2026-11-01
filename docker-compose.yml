@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: grocery
+      POSTGRES_USER: grocery
+      POSTGRES_PASSWORD: grocery
+    ports:
+      - "5434:5432"
+    volumes:
+      - grocery-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grocery -d grocery"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  grocery-db:
