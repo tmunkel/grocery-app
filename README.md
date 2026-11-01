@@ -56,7 +56,18 @@ docker compose up -d --no-build
 
 If the inventory service runs on another host, set `PRODUCT_INVENTORY_URL`. Images are built for the build machine's CPU architecture; for an ARM server, use `docker buildx build --platform linux/arm64`. The database tables are created automatically when the app first starts.
 
-The container serves plain HTTP. On the PC, `http://localhost` counts as a secure origin, so the camera works. Phones need HTTPS, so put a reverse proxy with a certificate in front of the app (for example Caddy, Traefik or nginx).
+The container serves plain HTTP. On the PC, `http://localhost` counts as a secure origin, so the camera works. Phones need HTTPS, so put a reverse proxy with a certificate in front of the app.
+
+### Behind Traefik (HTTPS)
+
+`docker-compose.traefik.yml` publishes the app at `https://grocery.<DOMAIN>` through a Traefik reverse proxy instead of host ports, and connects it to the inventory service directly over the shared `proxy` network (`http://inventory-api:8080/`). Enable it with these lines in `.env`:
+
+```
+COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml
+DOMAIN=example.com
+```
+
+Start the inventory service with its Traefik file first. The Traefik stack and a full walkthrough (certificates, registry, start order) live in the separate `deploy` folder; see its `README.md`.
 
 ## Run locally
 

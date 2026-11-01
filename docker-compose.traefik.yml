@@ -1,0 +1,25 @@
+# Publishes the app through Traefik (HTTPS) instead of host ports.
+# Enable on the server with COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml in .env.
+# Requires the Traefik stack (network "proxy") and the product inventory service (alias "inventory-api").
+services:
+  postgres:
+    ports: !reset []
+
+  app:
+    ports: !reset []
+    extra_hosts: !reset []
+    environment:
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      ProductInventory__BaseUrl: "http://inventory-api:8080/"
+    networks:
+      - default
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.grocery.rule=Host(`${APP_HOST:-grocery.${DOMAIN:?Set DOMAIN in .env}}`)
+      - traefik.http.routers.grocery.entrypoints=websecure
+      - traefik.http.services.grocery.loadbalancer.server.port=8080
+
+networks:
+  proxy:
+    external: true
